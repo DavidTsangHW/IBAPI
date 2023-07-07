@@ -9,7 +9,7 @@
 #
 # TRADER WORK STATION (TWS) MUST BE LOGGED IN SUCCESSFULY WHEN RUNNING THIS PROGRAM
 #
-# MAKE SURE YOU ARE CONNECTING A PAPER ACCOUNT WHEN TEST AND DEBUGGING
+# MAKE SURE YOU ARE CONNECTING A PAPER ACCOUNT FOR TEST AND DEBUG
 #
 # THE AUTHOR ACCEPTS NO RESPONSIBILITY FOR THE USE OF THIS PROGRAM. USE OF THIS PROGRAM IS ENTIRELY AT THE USER'S OWN RISK
 
@@ -23,7 +23,7 @@
 # Configure TWS
 # TWS > Global Configuration > API > Settings >
 # 1. Enable Active X and Socket Clients > Enable
-# 2. Socket port: 7497
+# 2. Socket port: Same as Parms.csv
 # 3. Read-only API > disable
 # 4. Allow connections from localhost only > Disable
 # 5. Allow connections from localhost only > Trusted IPs > Create > Enter 127.0.0.1
@@ -38,6 +38,8 @@ from ibapi.ticktype import TickTypeEnum
 
 import os
 
+import sys
+
 import pandas
 import numpy
 
@@ -49,8 +51,14 @@ import math
 
 import sqlite3
 
-wdir = '\\Python\\data\\'
-ofile = wdir + 'orderfx.db'
+import Parms
+
+argv = sys.argv
+
+longshort = argv[1]
+
+wdir = ''
+ofile = wdir + longshort + 'orderfx.db'
 con2 = sqlite3.connect(ofile)
 cursor2 = con2.cursor()
 
@@ -63,22 +71,28 @@ class CheckOrderApp(EWrapper, EClient):
     def __init__(self):
         EClient.__init__(self, self)
 
-    def openOrder(self, orderId, contract, order, orderState):
-        print(contract.symbol)
+    def openOrder(self, orderId, contract, order, orderState):        
         ls_order = str(order).split(' ')
-        print(ls_order[2])
-        print(ls_order[3].split('@')[0])
-        print(ls_order[3].split('@')[1])
+##        print(ls_order[2])
+##        print(ls_order[3].split('@')[0])
+##        print(ls_order[3].split('@')[1])
 
-        self.posns.append((contract.symbol, contract.currency, contract.exchange, ls_order[2], ls_order[3].split('@')[0],ls_order[3].split('@')[1]))
+        print(ls_order)
+
+        sign = 1
+        if ls_order[2] == 'SELL':
+            sign = -1
+
+        self.posns.append((contract.symbol, contract.currency, contract.exchange, ls_order[1] + ' ' + ls_order[2], sign, ls_order[3].split('@')[0],ls_order[3].split('@')[1]))
             
-    def orderStatus(self, orderId, status, filled, remaining,
-                         avgFillPrice, permId, parentId, lastFillPrice, clientId, whyHeld, mktCapPrice):
-        print("OrderStatus. Id:", orderId, "Status:", status, "Filled:", filled,
-           "Remaining:", remaining, "AvgFillPrice:", avgFillPrice,
-           "PermId:", permId, "ParentId:", parentId, "LastFillPrice:",
-           lastFillPrice, "ClientId:", clientId, "WhyHeld:",
-           whyHeld, "MktCapPrice:", mktCapPrice)        
+##    def orderStatus(self, orderId, status, filled, remaining,
+##                         avgFillPrice, permId, parentId, lastFillPrice, clientId, whyHeld, mktCapPrice):
+##        
+##        print("OrderStatus. Id:", orderId, "Status:", status, "Filled:", filled,
+##           "Remaining:", remaining, "AvgFillPrice:", avgFillPrice,
+##           "PermId:", permId, "ParentId:", parentId, "LastFillPrice:",
+##           lastFillPrice, "ClientId:", clientId, "WhyHeld:",
+##           whyHeld, "MktCapPrice:", mktCapPrice)        
 
     def position(self, account: str, contract: Contract, position: float, avgCost: float):
         self.account = account[0] + account[2:4]
@@ -88,8 +102,8 @@ class CheckOrderApp(EWrapper, EClient):
         self.reqAllOpenOrders()
         self.start()
 
-    #def execDetails(self,reqId,contract,execution):
-        #print("ExecDetails. ", reqId, contract.symbol, contract.secType, contract.currency, execution.execId, execution.orderId, execution.shares, execution.lastLiquidity)        
+    def execDetails(self,reqId,contract,execution):
+        print("ExecDetails. ", reqId, contract.symbol, contract.secType, contract.currency, execution.execId, execution.orderId, execution.shares, execution.lastLiquidity)        
 
     def start(self):
         pass
@@ -98,14 +112,11 @@ class CheckOrderApp(EWrapper, EClient):
         print("Error: ", reqId, " ", errorCode, " ", errorString)
 
     def openOrderEnd(self):
-        if self.posns:
-            self.df_pos = pandas.DataFrame(self.posns, columns = ['SYMBOL' , 'CURRENCY','EXCH','TYPE','QUANTITY','PRICE'])
-            self.df_pos = self.df_pos.sort_values('SYMBOL')
-            print(self.df_pos.head(100))
-            self.df_pos.to_sql('OpenOrder',con2,if_exists='replace',index=False)
 
-            sql = "select a.SYMBOL, POSITION, b.QUANTITY from position a left outer join (select SYMBOL, sum(QUANTITY) as [QUANTITY] from [OpenOrder] group by symbol) b on a.SYMBOL = b.SYMBOL"
-            
+        self.df_pos = pandas.DataFrame(self.posns, columns = ['SYMBOL' , 'CURRENCY','EXCH','TYPE', 'SIGN','QUANTITY','PRICE'])
+        self.df_pos = self.df_pos.sort_values('SYMBOL')
+        print(self.df_pos.head(100))
+        self.df_pos.to_sql('OpenOrder',con2,if_exists='replace',index=False)            
             
         self.done = True
         self.disconnect()
@@ -113,11 +124,14 @@ class CheckOrderApp(EWrapper, EClient):
 def main():
 
     app = CheckOrderApp()
-    app.connect("127.0.0.1", 7497, 1001)
+    
+    port = int(Parms.getParm(longshort + 'PORT'))    
+    app.connect("127.0.0.1", port, 1001)
     app.run()
     return
 
 
 if __name__ == '__main__':
     main()
+    con2.close()
     

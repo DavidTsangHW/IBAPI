@@ -9,7 +9,7 @@
 #
 # TRADER WORK STATION (TWS) MUST BE LOGGED IN SUCCESSFULY WHEN RUNNING THIS PROGRAM
 #
-# MAKE SURE YOU ARE CONNECTING A PAPER ACCOUNT WHEN TEST AND DEBUGGING
+# MAKE SURE YOU ARE CONNECTING A PAPER ACCOUNT FOR TEST AND DEBUG
 #
 # THE AUTHOR ACCEPTS NO RESPONSIBILITY FOR THE USE OF THIS PROGRAM. USE OF THIS PROGRAM IS ENTIRELY AT THE USER'S OWN RISK
 
@@ -23,7 +23,7 @@
 # Configure TWS
 # TWS > Global Configuration > API > Settings >
 # 1. Enable Active X and Socket Clients > Enable
-# 2. Socket port: 7497
+# 2. Socket port: Same as Parms.csv
 # 3. Read-only API > disable
 # 4. Allow connections from localhost only > Disable
 # 5. Allow connections from localhost only > Trusted IPs > Create > Enter 127.0.0.1
@@ -38,6 +38,8 @@ from ibapi.ticktype import TickTypeEnum
 
 import os
 
+import sys
+
 import pandas
 import numpy
 
@@ -49,8 +51,14 @@ import math
 
 import sqlite3
 
-wdir = '\\Python\\data\\'
-ofile = wdir + 'orderfx.db'
+import Parms
+
+argv = sys.argv
+
+longshort = argv[1]
+
+wdir = ''
+ofile = wdir + longshort + 'orderfx.db'
 con2 = sqlite3.connect(ofile)
 cursor2 = con2.cursor()
 
@@ -82,11 +90,10 @@ class CheckPositionApp(EWrapper, EClient):
         print("Error: ", reqId, " ", errorCode, " ", errorString)
 
     def positionEnd(self):   
-        if self.posns:
-            self.df_pos = pandas.DataFrame(self.posns, columns = ['ACCOUNT','SYMBOL' , 'CURRENCY','EXCH','POSITION'])
-            self.df_pos = self.df_pos.sort_values('SYMBOL')
-            print(self.df_pos.head(100))
-            self.df_pos.to_sql('Position',con2,if_exists='replace',index=False)
+        self.df_pos = pandas.DataFrame(self.posns, columns = ['ACCOUNT','SYMBOL' , 'CURRENCY','EXCH','POSITION'])
+        self.df_pos = self.df_pos.sort_values('SYMBOL')
+        self.df_pos.to_sql('Position',con2,if_exists='replace',index=False)
+        print(self.df_pos)
         self.done = True
         self.disconnect()
         return
@@ -94,11 +101,13 @@ class CheckPositionApp(EWrapper, EClient):
 def main():
 
     app = CheckPositionApp()
-    app.connect("127.0.0.1", 7497, 1001)
+    port = int(Parms.getParm(longshort + 'PORT')) 
+    app.connect("127.0.0.1", port, 1001)
     app.run()
     return
 
 
 if __name__ == '__main__':
     main()
+    con2.close()
     
